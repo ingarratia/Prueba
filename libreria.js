@@ -1,13 +1,13 @@
 //libreria para evitar repeticiones de codigo consultas ajax
-
 class consultas {
     constructor() {
         this.consultas = [];
     }
 
-    consultaAjax(url, datos, funcion) {
+    consultaAjax(url, method, datos, funcion) {
         var consulta = {
             url: url,
+            method: method,
             datos: datos,
             funcion: funcion
         }
@@ -19,49 +19,57 @@ class consultas {
             console.log("No hay consultas");
             return 0;
         }
-        
+
         console.log(this.consultas);
     }
 
-    ejecutarConsultas() {
+    async ejecutarConsultas() {
         var self = this;
         if (this.consultas.length > 0) {
             var consulta = this.consultas.shift();
-            $.ajax({
-                url: consulta.url,
-                data: consulta.datos,
-                success: function (data) {
-                    console.log(data);
-                    consulta.funcion(data);
-                    
-                    self.ejecutarConsultas();
-                }
-            });
+            try {
+                await $.ajax({
+                    url: consulta.url,
+                    method: consulta.method,
+                    data: consulta.datos,
+                    success: function (data) {
+                        consulta.funcion(data);
+                    },
+                    error: function (error) {
+                        consulta.funcion(error.statusText + " " + error.status);
+                    },
+                    complete: function () {
+                       self.ejecutarConsultas();
+                    }
+                });
+            } catch (e) {
+               self.ejecutarConsultas();
+            }
         }
     }
 
-    run() {
-        this.ejecutarConsultas();
+    async run() {
+        await this.ejecutarConsultas();
     }
 }
 
 var result = new consultas();
+var array = [];
 
 //Agrega una consulta a la cola de consultas
-function agregarConsulta(url, datos, funcion) {
-    result.consultaAjax(url, datos, funcion);
+function agregarConsulta(url, method, datos, funcion) {
+    result.consultaAjax(url, method, datos, funcion);
 }
 
-console.log(result.mostrarColaConsultas());
+function callback(data) {
+    array.push(data);
+}
 
+//Agrega consultas a la cola de consultas
+agregarConsulta('https://httpbin.org/get', "GET", {}, callback);
+agregarConsulta('https://jsonplaceholder.typicode.com/todos/1', "GET", {}, callback);
+agregarConsulta('https://dummyjson.com/products/1', "GET", {}, callback);
 
-
-/* consultas.ajaxconsulta({url: 'https://reqbin.com/echo/post/json', method: 'GET', data: {}, success: function (data) {
-    console.log(data);
-}, error: function (error) {}}); */
-
-agregarConsulta('https://httpbin.org/get', {}, function (data) {});
-
-console.log(result.mostrarColaConsultas());
-
-result.run();
+result.run().finally(function () {
+    console.log(array);
+});
